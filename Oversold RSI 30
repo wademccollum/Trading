@@ -1,0 +1,172 @@
+client = EnhancedRESTClient(api_key=api_key, api_secret=api_secret)
+
+def find_best_coin_for_2_percent_gain():
+    """Find the coin most likely to increase by 2% based on various factors."""
+    try:
+        print("Analyzing all coins to find the best candidate for 2% gain...")
+        
+        # Get all products
+        products_response = client.get_products()
+        products = products_response.products if hasattr(products_response, 'products') else []
+        
+        print(f"Found {len(products)} total products")
+        
+        # Filter for active USD pairs
+        usd_pairs = [p for p in products if hasattr(p, 'status') and p.status == 'online' and hasattr(p, 'quote_currency_id') and p.quote_currency_id == 'USD']
+        print(f"Found {len(usd_pairs)} active USD trading pairs")
+        
+        candidates = []
+        
+        for i, product in enumerate(usd_pairs):
+            product_id = product.product_id
+            
+            if i % 50 == 0:  # Progress indicator
+                print(f"Analyzing product {i+1}/{len(usd_pairs)}: {product_id}")
+            
+            try:
+                product_details = client.get_product(product_id)
+                
+                # Check if we have the necessary data
+                if (hasattr(product_details, 'price_percentage_change_24h') and 
+                    hasattr(product_details, 'volume_24h') and 
+                    hasattr(product_details, 'price') and
+                    product_details.price_percentage_change_24h is not None):
+                    
+                    price_change_24h = float(product_details.price_percentage_change_24h)
+                    volume_24h = float(product_details.volume_24h) if product_details.volume_24h else 0
+                    current_price = float(product_details.price)
+                    
+                    # Skip if price is too low (less than $0.01) or too high (more than $1000)
+                    if current_price < 0.01 or current_price > 1000:
+                        continue
+                    
+                    # Calculate a score based on multiple factors
+                    score = 0
+                    
+                    # Factor 1: Recent momentum (positive but not too high)
+                    if 0 < price_change_24h < 15:  # Sweet spot for momentum
+                        score += price_change_24h * 2
+                    elif price_change_24h >= 15:  # Too high, might be overbought
+                        score += 10
+                    elif price_change_24h < 0:  # Negative momentum
+                        score += max(price_change_24h * 0.5, -5)
+                    
+                    # Factor 2: Volume (higher volume = more liquidity and interest)
+                    if volume_24h > 1000000:  # High volume
+                        score += 5
+                    elif volume_24h > 100000:  # Medium volume
+                        score += 3
+                    elif volume_24h > 10000:  # Low volume
+                        score += 1
+                    
+                    # Factor 3: Price stability (avoid extremely volatile coins)
+                    if 0.1 <= current_price <= 100:  # Good price range
+                        score += 2
+                    
+                    # Factor 4: Recent positive momentum bonus
+                    if 1 <= price_change_24h <= 10:  # Sweet spot
+                        score += 3
+                    
+                    candidates.append({
+                        'product_id': product_id,
+                        'score': score,
+                        'price_change_24h': price_change_24h,
+                        'current_price': current_price,
+                        'volume_24h': volume_24h
+                    })
+                
+            except Exception as e:
+                continue
+        
+        # Sort by score (highest first)
+        candidates.sort(key=lambda x: x['score'], reverse=True)
+        
+        print(f"\nTop 10 candidates for 2% gain:")
+        print("=" * 80)
+        for i, candidate in enumerate(candidates[:10]):
+            print(f"{i+1}. {candidate['product_id']:<15} | Score: {candidate['score']:.2f} | 24h: {candidate['price_change_24h']:+.2f}% | Price: ${candidate['current_price']:.4f} | Volume: ${candidate['volume_24h']:,.0f}")
+        
+        if candidates:
+            best_coin = candidates[0]
+            print(f"\n🎯 BEST CANDIDATE: {best_coin['product_id']}")
+            print(f"   Score: {best_coin['score']:.2f}")
+            print(f"   24h Change: {best_coin['price_change_24h']:+.2f}%")
+            print(f"   Current Price: ${best_coin['current_price']:.4f}")
+            print(f"   24h Volume: ${best_coin['volume_24h']:,.0f}")
+            
+            return best_coin
+        else:
+            print("No suitable candidates found")
+            return None
+            
+    except Exception as e:
+        print(f"Error analyzing coins: {e}")
+        import traceback
+        traceback.print_exc()
+        return None
+
+def place_buy_order(coin_info, amount_usd=5):
+    """Place a buy order for the specified coin."""
+    try:
+        product_id = coin_info['product_id']
+        current_price = coin_info['current_price']
+        
+        print(f"\n📈 Placing buy order for {amount_usd}$ of {product_id}...")
+        
+        # Check USD balance
+        usd_balance = client.get_crypto_balance("USD")
+        print(f"USD Balance: {usd_balance}")
+        
+        if usd_balance < amount_usd:
+            print(f"Insufficient USD balance. Need ${amount_usd}, have ${usd_balance}")
+            return None
+        
+        # Generate order ID
+        order_id = str(datetime.datetime.now().strftime("%Y%m%d%H%M%S"))
+        print(f"Order ID: {order_id}")
+        
+        # Place market buy order
+        result = client.market_order_buy(order_id, product_id, None, str(amount_usd))
+        
+        # Check if the result is a dictionary (success case) or an object (API response)
+        if isinstance(result, dict) and result.get('success'):
+            print(f"✅ Buy order placed successfully!")
+            print(f"Order ID: {result['success_response']['order_id']}")
+            print(f"Product: {result['success_response']['product_id']}")
+            print(f"Side: {result['success_response']['side']}")
+            return result
+        elif hasattr(result, 'success_response'):  # CreateOrderResponse object
+            print(f"✅ Buy order placed successfully!")
+            print(f"Order ID: {result.success_response['order_id']}")
+            print(f"Product: {result.success_response['product_id']}")
+            print(f"Side: {result.success_response['side']}")
+            return result
+        elif hasattr(result, 'order_id'):  # API response object
+            print(f"✅ Buy order placed successfully!")
+            print(f"Order ID: {result.order_id}")
+            print(f"Product: {product_id}")
+            print(f"Side: BUY")
+            return result
+        else:
+            print(f"❌ Buy order failed: {result}")
+            return None
+            
+    except Exception as e:
+        print(f"Error placing buy order: {e}")
+        return None
+
+if __name__ == "__main__":
+    # Find the best coin
+    best_coin = find_best_coin_for_2_percent_gain()
+    
+    if best_coin:
+        # Place buy order
+        order_result = place_buy_order(best_coin, 5)
+        
+        if order_result:
+            print(f"\n🎉 Successfully placed $5 buy order for {best_coin['product_id']}!")
+            print("Monitor the price to see if it reaches your 2% target!")
+        else:
+            print("Failed to place buy order")
+    else:
+        print("No suitable coin found for trading") 
