@@ -1,0 +1,46 @@
+import datetime
+from coinbase_advanced_trader.enhanced_rest_client import EnhancedRESTClient
+
+api_key = "organizations/391e4845-9b98-4616-8f8c-1fd26548ffb8/apiKeys/7d809316-025e-4442-935b-0fe6327c680c"
+api_secret = "-----BEGIN EC PRIVATE KEY-----\nMHcCAQEEIF4zETe+VkgiKqEqQLgQZiYGz/0Hi1JRQdh0P6RZ411ooAoGCCqGSM49\nAwEHoUQDQgAERL7o7CYJWuktGub2eFosZbGaqAiQJOKAqDstyrapMxwUnWrGQLnc\nrpfMgkdyYN3nk4Rx4z9REVHIDEWBfBQhHA==\n-----END EC PRIVATE KEY-----\n"
+
+client = EnhancedRESTClient(api_key=api_key, api_secret=api_secret)
+asset="TIA-USD"
+amt=5
+Round_Digits=2
+
+# Check USD balance
+usd_balance = client.get_crypto_balance("USD")
+print(f"USD Balance: {usd_balance}")
+
+if usd_balance > amt:
+    # Place a buy order for BTC-USD for the value of amt if balance is higher than amt
+    
+    Order_Buy_ID = str(datetime.datetime.now().strftime("%Y%m%d%H%M%S"))
+    print(f"Order Buy ID: {Order_Buy_ID}")
+
+    result = client.market_order_buy(Order_Buy_ID, asset, None,str(amt))
+    #result = client.fiat_market_buy(asset, str(amt))
+    print(f"Buy Result: {result}")
+
+    import time
+    time.sleep(30)
+    
+    price = client._price_service.get_spot_price(asset)
+    print(f"Current Price: {price}")
+
+    tp_price = round((float(price) * 1.02), Round_Digits)
+    print(f"TP Price: {tp_price}")
+    stop_price = round((float(price) * 0.98), Round_Digits)
+
+    
+    Order_Sell_ID = str(datetime.datetime.now().strftime("%Y%m%d%H%M%S"))
+    order = client.trigger_bracket_order_gtc_sell(Order_Sell_ID, asset, str(amt), str(tp_price), str(stop_price))
+    
+    print(f"Sell Order Result: {order}")
+
+else:
+    print("Insufficient USD balance to buy Coin.")
+    exit()
+
+  
