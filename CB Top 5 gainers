@@ -1,0 +1,87 @@
+import datetime
+from coinbase_advanced_trader.enhanced_rest_client import EnhancedRESTClient
+
+api_key = "organizations/391e4845-9b98-4616-8f8c-1fd26548ffb8/apiKeys/7d809316-025e-4442-935b-0fe6327c680c"
+api_secret = "-----BEGIN EC PRIVATE KEY-----\nMHcCAQEEIF4zETe+VkgiKqEqQLgQZiYGz/0Hi1JRQdh0P6RZ411ooAoGCCqGSM49\nAwEHoUQDQgAERL7o7CYJWuktGub2eFosZbGaqAiQJOKAqDstyrapMxwUnWrGQLnc\nrpfMgkdyYN3nk4Rx4z9REVHIDEWBfBQhHA==\n-----END EC PRIVATE KEY-----\n"
+
+client = EnhancedRESTClient(api_key=api_key, api_secret=api_secret)
+
+def find_coins_up_10_percent():
+    """Find coins that have risen 10% or more in the last 24 hours."""
+    try:
+        print("Fetching all products from Coinbase...")
+        
+        # Use the base REST client to get all products
+        products_response = client.get_products()
+        
+        if not products_response:
+            print("No products returned from API")
+            return []
+        
+        # Extract the products list from the response
+        products = products_response.products if hasattr(products_response, 'products') else []
+            
+        print(f"Found {len(products)} total products")
+        
+        print("\nCoins that rose 10% or more in 24 hours:")
+        print("=" * 60)
+        
+        # Filter for active USD pairs and check 24h price change
+        usd_pairs = [p for p in products if hasattr(p, 'status') and p.status == 'online' and hasattr(p, 'quote_currency_id') and p.quote_currency_id == 'USD']
+        print(f"Found {len(usd_pairs)} active USD trading pairs")
+        
+        coins_up_10_percent = []
+        
+        for i, product in enumerate(usd_pairs):
+            product_id = product.product_id
+            
+            if i % 10 == 0:  # Progress indicator
+                print(f"Checking product {i+1}/{len(usd_pairs)}: {product_id}")
+            
+            try:
+                # Get product details including 24h stats
+                product_details = client.get_product(product_id)
+                
+                # Check if 24h price change data is available
+                if hasattr(product_details, 'price_percentage_change_24h') and product_details.price_percentage_change_24h:
+                    price_change_24h = float(product_details.price_percentage_change_24h)
+                    
+                    if price_change_24h >= 10.0:  # 10% or more increase
+                        current_price = getattr(product_details, 'price', 'N/A')
+                        volume_24h = getattr(product_details, 'volume_24h', 'N/A')
+                        
+                        coins_up_10_percent.append({
+                            'product_id': product_id,
+                            'price_change_24h': price_change_24h,
+                            'current_price': current_price,
+                            'volume_24h': volume_24h
+                        })
+                        
+                        print(f"{product_id:<15} | +{price_change_24h:.2f}% | Price: ${current_price} | Volume: ${volume_24h}")
+                
+            except Exception as e:
+                # Skip products that can't be fetched
+                continue
+        
+        # Sort by percentage gain (highest first)
+        coins_up_10_percent.sort(key=lambda x: x['price_change_24h'], reverse=True)
+        
+        print(f"\nTotal coins up 10%+ in 24h: {len(coins_up_10_percent)}")
+        return coins_up_10_percent
+        
+    except Exception as e:
+        print(f"Error fetching coins data: {e}")
+        import traceback
+        traceback.print_exc()
+        return []
+
+if __name__ == "__main__":
+    # Find coins up 10% or more
+    top_gainers = find_coins_up_10_percent()
+    
+    if top_gainers:
+        print("\nTop 5 gainers:")
+        for i, coin in enumerate(top_gainers[:5]):
+            print(f"{i+1}. {coin['product_id']}: +{coin['price_change_24h']:.2f}%")
+    else:
+        print("No coins found with 10%+ gains in 24 hours") 
