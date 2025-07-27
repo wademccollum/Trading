@@ -1,8 +1,6 @@
 import datetime
 from coinbase_advanced_trader.enhanced_rest_client import EnhancedRESTClient
 
-api_key = "organizations/391e4845-9b98-4616-8f8c-1fd26548ffb8/apiKeys/7d809316-025e-4442-935b-0fe6327c680c"
-api_secret = "-----BEGIN EC PRIVATE KEY-----\nMHcCAQEEIF4zETe+VkgiKqEqQLgQZiYGz/0Hi1JRQdh0P6RZ411ooAoGCCqGSM49\nAwEHoUQDQgAERL7o7CYJWuktGub2eFosZbGaqAiQJOKAqDstyrapMxwUnWrGQLnc\nrpfMgkdyYN3nk4Rx4z9REVHIDEWBfBQhHA==\n-----END EC PRIVATE KEY-----\n"
 
 client = EnhancedRESTClient(api_key=api_key, api_secret=api_secret)
 
