@@ -1,0 +1,73 @@
+import datetime
+from coinbase_advanced_trader.enhanced_rest_client import EnhancedRESTClient
+
+import os
+from dotenv import load_dotenv
+
+load_dotenv('credentials.env')
+
+api_key = os.getenv('COINBASE_API_KEY')
+api_secret = os.getenv('COINBASE_API_SECRET')
+
+client = EnhancedRESTClient(api_key=api_key, api_secret=api_secret)
+
+asset="ASM-USD"
+Fiat_amt=5
+#Round_Digits=2
+Upper_Limit=1.03
+Lower_Limit=0.95
+
+# Check USD balance
+usd_balance = client.get_crypto_balance("USD")
+print(f"USD Balance: {usd_balance}")
+
+price = client._price_service.get_spot_price(asset)
+print(f"Current Price: {price}")
+
+# Count decimal places in price
+decimal_count = 0
+if price is not None:
+    try:
+        price_str = str(price)
+        if '.' in price_str:
+            decimal_count = len(price_str.split('.')[1])
+    except:
+        decimal_count = 0
+print(f"Price has {decimal_count} decimal places")
+
+Round_Digits = decimal_count
+print(f"Round Digits: {Round_Digits}")
+
+Base_Amt = round(Fiat_amt/price, 0)
+print(f"Base Amount: {Base_Amt}")
+
+
+if usd_balance > Fiat_amt:
+    # Place a buy order for BTC-USD for the value of amt if balance is higher than amt
+    
+    Order_Buy_ID = str(datetime.datetime.now().strftime("%Y%m%d%H%M%S"))
+    print(f"Order Buy ID: {Order_Buy_ID}")
+
+    result = client.market_order_buy(Order_Buy_ID, asset, None,str(Base_Amt))
+    
+    print(f"Buy Result: {result}")
+
+    import time
+    time.sleep(30)
+    
+
+    tp_price = round((float(price) * Upper_Limit), Round_Digits)
+    print(f"TP Price: {tp_price}")
+    stop_price = round((float(price) * Lower_Limit), Round_Digits)
+    print(f"Stop Price: {stop_price}")
+    
+    Order_Sell_ID = str(datetime.datetime.now().strftime("%Y%m%d%H%M%S"))
+    order = client.trigger_bracket_order_gtc_sell(Order_Sell_ID, asset, str(Base_Amt), str(tp_price), str(stop_price))
+    
+    print(f"Sell Order Result: {order}")
+
+else:
+    print("Insufficient USD balance to buy Coin.")
+    exit()
+
+  
